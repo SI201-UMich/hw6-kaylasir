@@ -36,7 +36,12 @@ def load_json(filename):
         A dictionary with the JSON data, OR an empty dictionary {} if the file
         cannot be opened or is not valid JSON.
     """
-    pass
+    try:
+        with open(filename, "r", encoding ="utf-8") as file_obj:
+            return json.load(file_obj)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+    
 
 
 def create_cache(dictionary, filename):
@@ -51,7 +56,9 @@ def create_cache(dictionary, filename):
     RETURNS:
         None
     """
-    pass
+    with open(filename, "w", encoding="utf-8") as file_obj:
+        json.dump(dictionary, file_obj, indent =2)
+        
 
 
 def search_breed(breed_id):
