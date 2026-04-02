@@ -12,10 +12,10 @@
 # --- ARGUMENTS & EXPECTED RETURN VALUES PROVIDED --- #
 # --- SEE INSTRUCTIONS FOR FULL DETAILS ON METHOD IMPLEMENTATION --- #
 
-import requests
 import json
 import unittest
 import os
+from urllib import request, error
 
 from dogapi_sample_cache import (
     SAMPLE_CACHE,
@@ -75,15 +75,23 @@ def search_breed(breed_id):
         JSON body as a dict (with a top-level 'data' key on success), OR None if the
         request failed or the response does not represent a successful breed lookup.
     """
-    url = https://dogapi.dog/api/v2/breeds/{breed_id} 
+    url = f"https://dogapi.dog/api/v2/breeds/{breed_id}"
 
     try:
-        with request.urlopen(url, timeout=10) as response:
-            if response.status != 200:
-                return None
-            parsed_json = json.loads(response.read().decode("utf-8"))
+        response = request.urlopen(url, timeout=10)
+
+        if response.status != 200:
+            return None
+        data = response.read().decode("utf-8")
+        parsed_json = json.loads(data)
     except (error.URLError, error.HTTPError, TimeoutError, json.JSONDecodeError):
         return None
+    if not isinstance(parsed_json, dict):
+        return None
+    if "data" not in parsed_json or parsed_json["data"] is None:
+        return None
+    return parsed_json, url
+
 
 
 def update_cache(breed_ids, cache_file):
@@ -104,7 +112,7 @@ def update_cache(breed_ids, cache_file):
     successful_new_adds = 0
 
     for breed_id in breed_ids: 
-        url = f" https://dogapi.dog/api/v2/breeds/{breed_id}"
+        url = f"https://dogapi.dog/api/v2/breeds/{breed_id}"
         if url in cache:
             continue
         breed_data = search_breed(breed_id)
@@ -138,7 +146,30 @@ def get_longest_lifespan_breed(cache_file):
         A tuple (breed_name, max_lifespan_integer) for the winning breed, OR the
         string "No breeds found" if no breed in the cache has a life.max value.
     """
-    pass
+    cache = load_json(cache_file)
+    best_breed = None
+    best_lifespan = None
+
+    for breed_info in cache.values():
+        attributes = breed_info.get("data", {}).get("attributes", {})
+        breed_name = attributes.get("name")
+        max_lifespan = attributes.get("life", {}).get("max")
+
+        if not isinstance(breed_name, str) or not isinstance(max_lifespan, int):
+            continue
+
+        if (
+            best_lifespan is None 
+            or max_lifespan > best_lifespan
+            or (max_lifespan == best_lifespan and breed_name < best_breed)
+        ):
+            best_breed = breed_name
+            best_lifespan = max_lifespan
+    if best_breed is None:
+        return "No breeds found"
+    return best_breed, best_lifespan 
+
+
 
 
 def get_groups_above_cutoff(cutoff, cache_file):
@@ -157,7 +188,26 @@ def get_groups_above_cutoff(cutoff, cache_file):
     RETURNS:
         A dictionary {group_uuid: count} for groups with count >= cutoff only.
     """
-    pass
+    cache = load_json(cache_file)
+    group_counts = {}
+
+    for breed_info in cache.values():
+        group_id = (
+            breed_info.get("data", {})
+            .get("relationships", {})
+            .get("group", {})
+            .get("data", {})
+            .get("id")
+        )
+        if group_id is None:
+            continue
+        group_counts[group_id] = group_counts.get(group_id, 0) + 1
+
+    return {
+        group_id: count
+        for group_id, count in group_counts.items()
+        if count >= cutoff
+    }
 
 
 # Extra Credit
